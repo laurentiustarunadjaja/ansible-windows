@@ -1,0 +1,42 @@
+---
+- name: Windows Update Automation with Reboot Handling
+  hosts: windows
+  gather_facts: no
+  tasks:
+
+    - name: Start Windows Update Service
+      win_service:
+        name: wuauserv
+        start_mode: manual
+        state: started
+
+    - name: Check for Updates and Install
+      win_updates:
+        category_names:
+          - SecurityUpdates
+          - CriticalUpdates
+          - UpdateRollups
+        reboot: yes
+
+    - name: Force Reboot After Updates
+      win_reboot:
+        reboot_timeout: 600
+
+    - name: Wait for VM to Come Back Online After Reboot
+      wait_for_connection:
+        timeout: 600  # Wait up to 10 minutes (adjust if needed)
+
+    - name: Ensure Server is Fully Booted
+      win_shell: "Start-Sleep -Seconds 30"
+
+    - name: Verify Windows Update Service is Running After Restart
+      win_service:
+        name: wuauserv
+        state: started
+      register: post_reboot_service_status
+
+    - name: Set Windows Update Service Back to Manual or Disabled
+      win_service:
+        name: wuauserv
+        start_mode: manual  # Change to 'disabled' if preferred
+        state: stopped

@@ -1,0 +1,47 @@
+---
+- name: Verify Installed Programs on Windows
+  hosts: windows
+  gather_facts: no
+  tasks:
+
+    - name: Get Installed Programs
+      win_shell: |
+        Get-WmiObject -Query "SELECT Name, Version FROM Win32_Product" | Select-Object Name, Version | ConvertTo-Json
+      register: installed_programs
+
+    - name: Debug Installed Programs
+      debug:
+        var: installed_programs.stdout
+
+    - name: Verify Required Programs
+      set_fact:
+        missing_programs: >-
+          {{
+            ['VMware Tools', 'Panda Adaptive Defense 360', 'Panda Endpoint Agent']
+            | select('search', installed_programs.stdout | default(''))
+            | list
+          }}
+
+    - name: Display Missing Programs
+      debug:
+        msg: "Missing Programs: {{ missing_programs }}"
+      when: missing_programs | length > 0
+
+    - name: Write Installed Programs to Report File
+      win_shell: |
+        $content = @'
+        Installed Programs:
+        {{ installed_programs.stdout }}
+        '@
+        $content | Out-File -FilePath C:\InstalledProgramsReport.txt -Encoding utf8
+      args:
+        executable: powershell.exe
+
+    - name: Verify File Creation
+      win_stat:
+        path: C:\InstalledProgramsReport.txt
+      register: file_status
+
+    - name: Debug Report File Status
+      debug:
+        var: file_status.stat.exists

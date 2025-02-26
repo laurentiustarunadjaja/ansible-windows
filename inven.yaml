@@ -1,0 +1,10 @@
+windows:
+  hosts:
+    windows_target:
+       ansible_host: 192.168.56.102
+       ansible_connection: winrm
+       ansible_winrm_server_cert_validation: ignore
+       ansible_winrm_transport: ntlm
+       ansible_winrm_scheme: http
+       ansible_port: 5985
+       ansible_user: Ansible

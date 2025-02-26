@@ -1,0 +1,166 @@
+---
+- name: Test System log retrieval
+  hosts: windows
+  gather_facts: false
+  tasks:
+    - name: Get System log info
+      win_shell: |
+        $log = Get-WmiObject -Class Win32_NTEventLogFile -Filter "LogFileName='System'"
+        Write-Host "Count=$($log.NumberOfRecords)"
+        Write-Host "SizeMB=$([Math]::Round($log.FileSize / 1MB, 2))"
+      register: system_log
+
+    - name: Debug raw system_log
+      debug:
+        var: system_log
+
+    - name: Parse system_log output
+      set_fact:
+        sys_log_count: >-
+          {{
+            system_log.stdout_lines
+            | select("match","^Count=")
+            | first | default("Count=0")
+            | regex_replace("^Count=","")
+          }}
+        sys_log_size: >-
+          {{
+            system_log.stdout_lines
+            | select("match","^SizeMB=")
+            | first | default("SizeMB=0")
+            | regex_replace("^SizeMB=","")
+          }}
+
+    - name: Debug parsed facts
+      debug:
+        msg: "System Log Count={{ sys_log_count }}, System Log Size={{ sys_log_size }} MB"
+
+
+    - name: Get Application log info
+      win_shell: |
+        $log = Get-WmiObject -Class Win32_NTEventLogFile -Filter "LogFileName='Application'"
+        Write-Host "Count=$($log.NumberOfRecords)"
+        Write-Host "SizeMB=$([Math]::Round($log.FileSize / 1MB, 2))"
+      register: application_log
+
+    - name: Debug raw application_log
+      debug:
+        var: application_log
+
+    - name: Parse application_log output
+      set_fact:
+        app_log_count: >-
+          {{
+            application_log.stdout_lines
+            | select("match","^Count=")
+            | first | default("Count=0")
+            | regex_replace("^Count=","")
+          }}
+        app_log_size: >-
+          {{
+            application_log.stdout_lines
+            | select("match","^SizeMB=")
+            | first | default("SizeMB=0")
+            | regex_replace("^SizeMB=","")
+          }}
+
+    - name: Debug parsed facts
+      debug:
+        msg: "Application Log Count={{ app_log_count }}, Application Log Size={{ app_log_size }} MB"
+
+    - name: Get Security log info
+      win_shell: |
+        $log = Get-WmiObject -Class Win32_NTEventLogFile -Filter "LogFileName='Security'"
+        Write-Host "Count=$($log.NumberOfRecords)"
+        Write-Host "SizeMB=$([Math]::Round($log.FileSize / 1MB, 2))"
+      register: security_log
+
+    - name: Debug raw security_log
+      debug:
+        var: security_log
+
+    - name: Parse security_log output
+      set_fact:
+        sec_log_count: >-
+          {{
+            security_log.stdout_lines
+            | select("match","^Count=")
+            | first | default("Count=0")
+            | regex_replace("^Count=","")
+          }}
+        sec_log_size: >-
+          {{
+            security_log.stdout_lines
+            | select("match","^SizeMB=")
+            | first | default("SizeMB=0")
+            | regex_replace("^SizeMB=","")
+          }}
+
+    - name: Debug parsed facts
+      debug:
+        msg: "Security Log Count={{ sec_log_count }}, Security Log Size={{ sec_log_size }} MB"
+
+    - name: Get Setup log info
+      win_shell: |
+        $log = Get-WmiObject -Class Win32_NTEventLogFile -Filter "LogFileName='Setup'"
+        Write-Host "Count=$($log.NumberOfRecords)"
+        Write-Host "SizeMB=$([Math]::Round($log.FileSize / 1MB, 2))"
+      register: setup_log
+
+    - name: Debug raw setup_log
+      debug:
+        var: setup_log
+
+    - name: Parse setup_log output
+      set_fact:
+        stp_log_count: >-
+          {{
+            setup_log.stdout_lines
+            | select("match","^Count=")
+            | first | default("Count=0")
+            | regex_replace("^Count=","")
+          }}
+        stp_log_size: >-
+          {{
+            setup_log.stdout_lines
+            | select("match","^SizeMB=")
+            | first | default("SizeMB=0")
+            | regex_replace("^SizeMB=","")
+          }}
+
+    - name: Debug parsed facts
+      debug:
+        msg: "Setup Log Count={{ stp_log_count }}, Setup Log Size={{ stp_log_size }} MB"
+
+
+    - name: Write to report file
+      win_shell: |
+        $content = @'
+        Application Log Count: {{ app_log_count }}
+        Application Log Size : {{ app_log_size }} MB
+        Security Log Count: {{ sec_log_count }}
+        Security Log Size : {{ sec_log_size }} MB
+        Setup Log Count: {{ stp_log_count }}
+        Setup Log Size : {{ stp_log_size }} MB
+        System Log Count: {{ sys_log_count }}
+        System Log Size : {{ sys_log_size }} MB
+        '@
+        $content | Out-File -FilePath C:\EventLogReport.txt -Encoding utf8
+      args:
+        executable: powershell.exe
+
+    - name: Verify File Creation
+      win_stat:
+        path: C:\EventLogReport.txt
+      register: file_status
+
+    - name: Clear each Windows log
+      #win_eventlog:
+        #name: "{{ item }}"
+        #state: clear
+      win_shell: wevtutil cl "{{ item }}"
+      loop:
+        - Application
+        - Security
+        - System
+        - Setup
