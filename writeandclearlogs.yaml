@@ -3,25 +3,26 @@
   hosts: windows
   gather_facts: no
   vars:
-    log_dir: 'C:\Users\vagrant\Documents'
+    today_ddmmyyyy: "{{ '%d-%m-%Y' | strftime }}"
+    dated_path: 'C:\Kalibrasi\{{ today_ddmmyyyy }}'
 
   tasks:
     - name: Ensure log directory exists
       ansible.windows.win_file:
-        path: "{{ log_dir }}"
+        path: "{{ dated_path }}"
         state: directory
 
     - name: Export Application event log to EVTX
-      ansible.windows.win_shell: wevtutil.exe epl Application "{{ log_dir }}\Application.evtx"
+      ansible.windows.win_shell: wevtutil.exe epl Application "{{ dated_path }}\Application.evtx"
 
     - name: Export Security event log to EVTX
-      ansible.windows.win_shell: wevtutil.exe epl Security "{{ log_dir }}\Security.evtx"
+      ansible.windows.win_shell: wevtutil.exe epl Security "{{ dated_path }}\Security.evtx"
 
     - name: Export System event log to EVTX
-      ansible.windows.win_shell: wevtutil.exe epl System "{{ log_dir }}\System.evtx"
+      ansible.windows.win_shell: wevtutil.exe epl System "{{ dated_path }}\System.evtx"
 
     - name: Export Setup event log to EVTX
-      ansible.windows.win_shell: wevtutil.exe epl Setup "{{ log_dir }}\Setup.evtx"
+      ansible.windows.win_shell: wevtutil.exe epl Setup "{{ dated_path }}\Setup.evtx"
 
     - name: Clear each Windows log
       win_shell: wevtutil cl "{{ item }}"
