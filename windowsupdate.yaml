@@ -20,11 +20,11 @@
 
     - name: Force Reboot After Updates
       win_reboot:
-        reboot_timeout: 600
+        reboot_timeout: 3600
 
     - name: Wait for VM to Come Back Online After Reboot
       wait_for_connection:
-        timeout: 600  # Wait up to 10 minutes (adjust if needed)
+        timeout: 3600  # Wait up to 1 hours (adjust if needed)
 
     - name: Ensure Server is Fully Booted
       win_shell: "Start-Sleep -Seconds 30"
