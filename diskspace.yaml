@@ -3,13 +3,13 @@
   gather_facts: no
   tasks:
 
-    - name: Get Disk Space Info in MB
+    - name: Get Disk Space Info in GB
       win_shell: |
         Get-PSDrive -PSProvider FileSystem | 
         Select-Object Name, 
-          @{Name="Used_MB"; Expression={[math]::Round($_.Used / 1MB, 2)}}, 
-          @{Name="Free_MB"; Expression={[math]::Round($_.Free / 1MB, 2)}}, 
-          @{Name="Total_MB"; Expression={[math]::Round(($_.Used + $_.Free) / 1MB, 2)}} | 
+          @{Name="Used_GB"; Expression={[math]::Round($_.Used / 1GB, 2)}}, 
+          @{Name="Free_GB"; Expression={[math]::Round($_.Free / 1GB, 2)}}, 
+          @{Name="Total_GB"; Expression={[math]::Round(($_.Used + $_.Free) / 1GB, 2)}} | 
         ConvertTo-Json
       register: disk_info
 
@@ -35,3 +35,4 @@
     - name: Debug Report File Status
       debug:
         var: file_status.stat.exists
+
