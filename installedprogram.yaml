@@ -7,15 +7,23 @@
   vars:
     required_programs:
       - "VMware Tools"
-      - "Panda Adaptive Defense 360"
-      - "Panda Endpoint Agent"
+      - "Athena EPP Agent"
+        #  - "Panda Adaptive Defense 360"
+        #  - "Panda Endpoint Agent"
       - "Endpoint Secure Agent"
-    report_path: 'C:\InstalledProgramsReport.txt'
+    today_ddmmyyyy: "{{ '%d-%m-%Y' | strftime }}"
+    report_path: 'C:\Kalibrasi\{{ today_ddmmyyyy }}\InstalledProgramsReport.txt'
     fail_if_missing: true
 
   tasks:
     - name: Gather minimal facts (hostname, time)
       ansible.builtin.setup:
+
+    # Tambah ini
+    - name: Ensure report directory exists
+      ansible.windows.win_file:
+        path: 'C:\Kalibrasi\{{ today_ddmmyyyy }}'
+        state: directory
 
     - name: Collect installed programs (registry, 32/64-bit)
       ansible.windows.win_shell: |
@@ -37,7 +45,7 @@
 
     - name: Parse installed programs JSON
       ansible.builtin.set_fact:
-        installed_programs: "{{ (installed_programs_raw.stdout | default('[]')) | from_json | list }}"
+        installed_programs: "{{ (installed_programs_raw.stdout | default('[]') | trim | default('[]', true)) | from_json | list }}"
 
     - name: Build installed_names
       ansible.builtin.set_fact:
@@ -101,3 +109,4 @@
     - name: Show report file status
       ansible.builtin.debug:
         var: file_status.stat.exists
+
