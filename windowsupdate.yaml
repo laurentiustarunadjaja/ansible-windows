@@ -2,8 +2,11 @@
 - name: Windows Update Automation with Reboot Handling
   hosts: windows
   gather_facts: no
+  vars:
+    reboot_timeout_seconds: 600 # 4.5 jam
+    connection_timeout_seconds: 600
+    post_reboot_wait_seconds: 120 # 2 menit
   tasks:
-
     - name: Start Windows Update Service
       win_service:
         name: wuauserv
@@ -16,27 +19,98 @@
           - SecurityUpdates
           - CriticalUpdates
           - UpdateRollups
+        state: installed
         reboot: yes
+      register: update_result
 
-    - name: Force Reboot After Updates
+    - name: Display Update Results
+      debug:
+        msg:
+          - "Found updates: {{ update_result.found_update_count | default(0) }}"
+          - "Installed updates: {{ update_result.installed_update_count | default(0) }}"
+          - "Reboot required: {{ update_result.reboot_required | default(false) }}"
+      when: update_result is defined
+
+    # - name: Force Reboot After Updates
+    #   win_reboot:
+    #     reboot_timeout: 600
+
+    - name: Reboot if Required
       win_reboot:
-        reboot_timeout: 3600
+        pre_reboot_delay: 30
+        reboot_timeout: "{{ reboot_timeout_seconds }}"
+        post_reboot_delay: "{{ post_reboot_wait_seconds }}"
+        msg: "Rebooting after Windows Updates"
+        test_command: "whoami"
+      register: reboot_result
+      when:
+        - update_result is defined
+        - update_result.reboot_required | default(false) | bool
 
-    - name: Wait for VM to Come Back Online After Reboot
+    # - name: Wait for VM to Come Back Online After Reboot
+    #   wait_for_connection:
+    #     timeout: 00 # Wait up to 10 minutes (adjust if needed)
+
+    - name: Wait for System to be Fully Ready After Reboot
       wait_for_connection:
-        timeout: 3600  # Wait up to 1 hours (adjust if needed)
+        timeout: "{{ connection_timeout_seconds }}"
+        delay: 120
+      when:
+        - reboot_result is defined
+        - reboot_result.changed | default(false)
 
-    - name: Ensure Server is Fully Booted
-      win_shell: "Start-Sleep -Seconds 30"
+    # - name: Ensure Server is Fully Booted
+    #   win_shell: "Start-Sleep -Seconds 30"
 
-    - name: Verify Windows Update Service is Running After Restart
+    - name: Verify Windows Update Service is Running After Reboot
       win_service:
         name: wuauserv
         state: started
-      register: post_reboot_service_status
+      when:
+        - reboot_result is defined
+        - reboot_result.changed | default(false)
 
-    - name: Set Windows Update Service Back to Manual or Disabled
+    # - name: Verify Windows Update Service is Running After Restart
+    #   win_service:
+    #     name: wuauserv
+    #     state: started
+    #   register: post_reboot_service_status
+
+    - name: Check if Additional Updates are Available After Reboot
+      win_updates:
+        category_names:
+          - SecurityUpdates
+          - CriticalUpdates
+          - UpdateRollups
+        state: searched
+      register: post_reboot_updates
+      when:
+        - reboot_result is defined
+        - reboot_result.changed | default(false)
+
+    - name: Display Post-Reboot Update Status
+      debug:
+        msg: "Additional updates found after reboot: {{ post_reboot_updates.found_update_count | default(0) }}"
+      when: post_reboot_updates is defined
+
+    - name: Set Windows Update Service Back to Manual
       win_service:
         name: wuauserv
-        start_mode: manual  # Change to 'disabled' if preferred
+        start_mode: manual
         state: stopped
+
+    - name: Final Status Report
+      debug:
+        msg:
+          - "=========================================="
+          - "         WINDOWS UPDATE SUMMARY           "
+          - "=========================================="
+          - "Host: {{ inventory_hostname }}"
+          - "Updates Found: {{ update_result.found_update_count | default(0) }}"
+          - "Updates Installed: {{ update_result.installed_update_count | default(0) }}"
+          - "Updates Failed: {{ update_result.failed_update_count | default(0) }}"
+          - "Reboot Performed: {{ reboot_result.changed | default(false) }}"
+          - "Reboot Duration: {{ reboot_result.elapsed | default(0) }} seconds"
+          - "Additional Updates Available: {{ post_reboot_updates.found_update_count | default(0) }}"
+          - "=========================================="
+
