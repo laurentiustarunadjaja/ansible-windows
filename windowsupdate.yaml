@@ -3,8 +3,8 @@
   hosts: windows
   gather_facts: no
   vars:
-    reboot_timeout_seconds: 600 # 4.5 jam
-    connection_timeout_seconds: 600
+    reboot_timeout_seconds: 16200 # 4.5 jam
+    connection_timeout_seconds: 16200
     post_reboot_wait_seconds: 120 # 2 menit
   tasks:
     - name: Start Windows Update Service
@@ -15,10 +15,7 @@
 
     - name: Check for Updates and Install
       win_updates:
-        category_names:
-          - SecurityUpdates
-          - CriticalUpdates
-          - UpdateRollups
+        category_names: "*"
         state: installed
         reboot: yes
       register: update_result
@@ -113,4 +110,3 @@
           - "Reboot Duration: {{ reboot_result.elapsed | default(0) }} seconds"
           - "Additional Updates Available: {{ post_reboot_updates.found_update_count | default(0) }}"
           - "=========================================="
-
