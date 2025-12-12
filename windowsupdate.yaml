@@ -1,112 +1,70 @@
----
-- name: Windows Update Automation with Reboot Handling
+--- 
+- name: Windows Update
   hosts: windows
   gather_facts: no
   vars:
-    reboot_timeout_seconds: 16200 # 4.5 jam
-    connection_timeout_seconds: 16200
-    post_reboot_wait_seconds: 120 # 2 menit
+    update_max_runtime: 7200 # 2 jam
+    reboot_timeout: 3600     # 1 jam
+
   tasks:
-    - name: Start Windows Update Service
-      win_service:
+    - name: Ensure Windows Update Service is Running
+      ansible.windows.win_service:
         name: wuauserv
         start_mode: manual
         state: started
 
-    - name: Check for Updates and Install
-      win_updates:
-        category_names: "*"
+    - name: Install Updates
+      ansible.windows.win_updates:
+        category_names: '*'
         state: installed
-        reboot: yes
-      register: update_result
+        reboot: no
+      async: "{{ update_max_runtime }}"
+      poll: 30
+      register: update_result_1
 
-    - name: Display Update Results
-      debug:
-        msg:
-          - "Found updates: {{ update_result.found_update_count | default(0) }}"
-          - "Installed updates: {{ update_result.installed_update_count | default(0) }}"
-          - "Reboot required: {{ update_result.reboot_required | default(false) }}"
-      when: update_result is defined
+    - name: Reboot
+      ansible.windows.win_reboot:
+        reboot_timeout: "{{ reboot_timeout }}"
 
-    # - name: Force Reboot After Updates
-    #   win_reboot:
-    #     reboot_timeout: 600
+    - name: Check for Leftover Updates
+      ansible.windows.win_updates:
+        category_names: '*'
+        state: installed
+        reboot: no
+      async: "{{ update_max_runtime }}"
+      poll: 30
+      register: update_result_2
+      when: >
+        update_result_1.found_update_count | default(0) > 0 or
+        update_result_1.reboot_required | default(false)
 
-    - name: Reboot if Required
-      win_reboot:
-        pre_reboot_delay: 30
-        reboot_timeout: "{{ reboot_timeout_seconds }}"
-        post_reboot_delay: "{{ post_reboot_wait_seconds }}"
-        msg: "Rebooting after Windows Updates"
-        test_command: "whoami"
-      register: reboot_result
-      when:
-        - update_result is defined
-        - update_result.reboot_required | default(false) | bool
+    - name: Reboot
+      ansible.windows.win_reboot:
+        reboot_timeout: "{{ reboot_timeout }}"
+      when: 
+        - update_result_2 is not skipped
 
-    # - name: Wait for VM to Come Back Online After Reboot
-    #   wait_for_connection:
-    #     timeout: 00 # Wait up to 10 minutes (adjust if needed)
+    - name: Force Windows Update UI Refresh
+      ansible.windows.win_shell: |
+        usoclient StartInteractiveScan
+      changed_when: false
+      ignore_errors: yes
 
-    - name: Wait for System to be Fully Ready After Reboot
-      wait_for_connection:
-        timeout: "{{ connection_timeout_seconds }}"
-        delay: 120
-      when:
-        - reboot_result is defined
-        - reboot_result.changed | default(false)
+    - name: Wait for UI Sync
+      ansible.builtin.pause:
+        seconds: 10
 
-    # - name: Ensure Server is Fully Booted
-    #   win_shell: "Start-Sleep -Seconds 30"
-
-    - name: Verify Windows Update Service is Running After Reboot
-      win_service:
+    - name: Stop Windows Update Service
+      ansible.windows.win_service:
         name: wuauserv
-        state: started
-      when:
-        - reboot_result is defined
-        - reboot_result.changed | default(false)
-
-    # - name: Verify Windows Update Service is Running After Restart
-    #   win_service:
-    #     name: wuauserv
-    #     state: started
-    #   register: post_reboot_service_status
-
-    - name: Check if Additional Updates are Available After Reboot
-      win_updates:
-        category_names:
-          - SecurityUpdates
-          - CriticalUpdates
-          - UpdateRollups
-        state: searched
-      register: post_reboot_updates
-      when:
-        - reboot_result is defined
-        - reboot_result.changed | default(false)
-
-    - name: Display Post-Reboot Update Status
-      debug:
-        msg: "Additional updates found after reboot: {{ post_reboot_updates.found_update_count | default(0) }}"
-      when: post_reboot_updates is defined
-
-    - name: Set Windows Update Service Back to Manual
-      win_service:
-        name: wuauserv
-        start_mode: manual
         state: stopped
 
-    - name: Final Status Report
+    - name: Final Update Report
       debug:
         msg:
           - "=========================================="
-          - "         WINDOWS UPDATE SUMMARY           "
-          - "=========================================="
           - "Host: {{ inventory_hostname }}"
-          - "Updates Found: {{ update_result.found_update_count | default(0) }}"
-          - "Updates Installed: {{ update_result.installed_update_count | default(0) }}"
-          - "Updates Failed: {{ update_result.failed_update_count | default(0) }}"
-          - "Reboot Performed: {{ reboot_result.changed | default(false) }}"
-          - "Reboot Duration: {{ reboot_result.elapsed | default(0) }} seconds"
-          - "Additional Updates Available: {{ post_reboot_updates.found_update_count | default(0) }}"
+          - "Phase 1 Installed: {{ update_result_1.installed_update_count | default(0) }}"
+          - "Phase 1 Rebooted: {{ update_result_1.reboot_required | default(false) }}"
+          - "Phase 2 Installed: {{ update_result_2.installed_update_count | default(0) }}"
           - "=========================================="
