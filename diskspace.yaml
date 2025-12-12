@@ -1,15 +1,18 @@
 - name: Check Free Space on Virtual HDD
   hosts: windows
   gather_facts: no
+  vars:
+    today_ddmmyyyy: "{{ '%d-%m-%Y' | strftime }}"
+    dated_path: 'C:\Kalibrasi\{{ today_ddmmyyyy }}'
   tasks:
 
-    - name: Get Disk Space Info in GB
+    - name: Get Disk Space Info in MB
       win_shell: |
-        Get-PSDrive -PSProvider FileSystem | 
-        Select-Object Name, 
-          @{Name="Used_GB"; Expression={[math]::Round($_.Used / 1GB, 2)}}, 
-          @{Name="Free_GB"; Expression={[math]::Round($_.Free / 1GB, 2)}}, 
-          @{Name="Total_GB"; Expression={[math]::Round(($_.Used + $_.Free) / 1GB, 2)}} | 
+        Get-PSDrive -PSProvider FileSystem |
+        Select-Object Name,
+          @{Name="Used_MB"; Expression={[math]::Round($_.Used / 1MB, 2)}},
+          @{Name="Free_MB"; Expression={[math]::Round($_.Free / 1MB, 2)}},
+          @{Name="Total_MB"; Expression={[math]::Round(($_.Used + $_.Free) / 1MB, 2)}} |
         ConvertTo-Json
       register: disk_info
 
@@ -17,22 +20,26 @@
       debug:
         var: disk_info.stdout
 
+    - name: Ensure report directory exists (Kalibrasi + date)
+      win_file:
+        path: "{{ dated_path }}"
+        state: directory
+
     - name: Write Disk Space Info to Report File
       win_shell: |
         $content = @'
         Disk Space Report:
         {{ disk_info.stdout }}
         '@
-        $content | Out-File -FilePath C:\DiskSpaceReport.txt -Encoding utf8
+        $content | Out-File -FilePath '{{ dated_path }}\DiskSpaceReport.txt' -Encoding utf8
       args:
         executable: powershell.exe
 
     - name: Verify Report File Creation
       win_stat:
-        path: C:\DiskSpaceReport.txt
+        path: '{{ dated_path }}\DiskSpaceReport.txt'
       register: file_status
 
     - name: Debug Report File Status
       debug:
         var: file_status.stat.exists
-
