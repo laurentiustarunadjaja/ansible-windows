@@ -1,4 +1,4 @@
----
+ ---
 - name: Save & Clear Windows Event Logs (Optimized)
   hosts: windows
   gather_facts: no
@@ -17,23 +17,31 @@
         path: "{{ dated_path }}"
         state: directory
 
-    - name: Get event log counts before clearing (fast)
+    - name: Get event log counts before clearing (grouped arrays)
       ansible.windows.win_shell: |
         $logs = @('Application','Security','System','Setup')
-        $results = @()
-        foreach ($log in $logs) {
-          $count = (Get-WinEvent -ListLog $log).RecordCount
-          $results += [PSCustomObject]@{
-            LogName = $log
-            EventCount = $count
-          }
-        }
-        $results | ConvertTo-Json
-      register: log_counts_json
+        $logNames = @()
+        $eventCounts = @()
 
-    - name: Display Event Log Counts (parsed)
+        foreach ($log in $logs) {
+          $logNames += $log
+          $eventCounts += (Get-WinEvent -ListLog $log).RecordCount
+        }
+
+        # Kembalikan satu objek dengan dua properti berupa array
+        $obj = [PSCustomObject]@{
+          LogName    = $logNames
+          EventCount = $eventCounts
+        }
+        $obj | ConvertTo-Json -Compress
+      register: log_counts_grouped_json
+
+    # Debug agar tampil sebagai dua objek (LogName & EventCount)
+    - name: Display Event Log Counts (parsed, two objects)
       debug:
-        msg: "{{ log_counts_json.stdout | from_json }}"
+        msg:
+          - LogName: "{{ (log_counts_grouped_json.stdout | from_json).LogName }}"
+          - EventCount: "{{ (log_counts_grouped_json.stdout | from_json).EventCount }}"
 
     - name: Export event logs to EVTX
       ansible.windows.win_shell: >
